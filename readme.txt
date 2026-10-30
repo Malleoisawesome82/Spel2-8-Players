@@ -1,4 +1,35 @@
-8 player online mod
+/!\ /!\ /!\ ONLY DOWNLOAD THIS MOD FROM TRUSTED SOURCES /!\ /!\ /!\ 
+           	 (Spelunky.fyi, Modlunky Menu, Github repository)
+Disclaimer: The mod is considered "unsafe" due to the requirement of UdpServer methods. Hosting a server will require knowledge on how to port forward and assumes any risk that comes with hosting a server on the internet. Joining a server assumes any risk with giving your IP to someone, but do feel free to use a VPN. Ignore this warning if you are only doing LAN / Multi-Instance / Local sessions.
+
+  v0.10.3.2b
+I believe the mod is stable enough to upload to github and let random people download and try it out.
+this is ABSOLUTELY NOT the first version, nor will it be the last. If the reception is positive then I may try my hand at adding rollback on top of the current input delay system. 
+Any version starting with v0 is a pre-release version with no guarantees of stability. v1 versions are full release versions that assume everything is steady enough for a young child to be able to set up or join a server and start playing. v2 is not planned currently but if it were to release, it would include major change such as rollback, full 8 player compatibility with the base game, or maybe API function hijacking for other mods to recognize the extra players with functions like `get_player()` and the `players` table.
+
+  What is this?
+Spelunky 2 is an adventure game where you explore caves and supports up to 4 player simultaneous online co-op. I got bored one day and decided to entertain a what-if, and that was "What if there was 8 player online support, and what if i could join an online game with 2 people on the same client?" so i got to work. After almost a year of on and off work and dealing with API hauntings, this is the result of that effort. 
+
+Spelunky.fyi is a website specifically for Spelunky mods and scripting thereof. The current version on there as of now is 0.10.2.5, a test version which is missing server hosting capabilities and contains a bug that only allows clients to spawn 7 players instead of 8, and is missing the `Network Profile` feature. On that website you can also download Modlunky, which is a program that lets you easily install and update Spelunky mods. Using the install code `8-players` in Modlunky will download this mod from the Spelunky.fyi website. 
+
+  How to play?
+First you need Spelunky 2. Second you need a way to run this mod, either through a modloader (Modlunky) or using Overlunky (Not recommended). Then if you're hosting a server and letting people on the open internet join, you either need to use a game hosting tunneler like Playit.gg, VPN hosting like LogMeInHamachi, or traditional port forwarding methods. If you're a little paranoid and don't want to expose your IP to random people then I'd recommend the first two methods. If you're instead joining a server and don't want to expose your IP you can use a VPN. See readme.txt for more details. Under no circumstance should you download this mod from unofficial sources because annoyingly, Spelunky 2's mod loader doesn't tell you *why* a mod is unsafe, it just tells you that it is. This means that a bad actor can take my mod, put malicious code in, then lie to people saying it is my mod to get them to download it, and nobody would be suspicious because this mod is already marked as "unsafe." 
+
+If you want to replace your mod with the scripts in the github repository, simply download and place them in the folder, making sure to replace the originals. 
+
+-------------------------------------------------------
+
+   Some terminology
+Manager - The mod is split into 2 parts. 1 part handles the 8 player adventure co-op, and the other part handles the networking functionality. I call them the `Local Manager` and `Online Manager` respectively.
+Online Panel - A window that allows you to set your name and host/join a game. Extra options will appear for the Host.
+Local - You're running the 8 player adventure mod with only 1 instance and NOT using the online panel to get extra players.
+Instance - An open, running game window of Spelunky 2. 
+Session - When an online game is created and people on different clients can join.
+Multi-Instance Session - You're running 2 or more instances of Spelunky 2 on the same device and you're using the Online Panel to connect both of them together. 
+Network Profile - There are 4 different profiles depending on your session type. Those being: `Wi-Fi (Good)`, `Wi-Fi (Poor)`, `LAN`, and `Multi-Instance`. These slightly adjust the behavior of both Managers for the smoothest experience for the end user. For example, setting the Network Profile to `Multi-Instance` will allow for unfocused gamepad input for any instance that enables it.
+
+
+How To......
 
 How to join a server:
 1. Make sure the host unlocks the player list before joining
