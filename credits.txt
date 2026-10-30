@@ -1,0 +1,49 @@
+Main Programmer(s) -
+  Malleoisawesome82
+
+Online Playtesters
+  Don Cheadle (TinkyDinky)
+  Korbs
+  Gboi
+  SploogeMcduck
+  MCvein
+  Zatou
+  Boda
+  Nitroxy
+
+-----------------------------------------------------
+
+Spelunky 2 - 8 Player Adventure
+
+Create a self-hosted server and start an adventure with up to 8 simultaneous players!
+
+
+/!\ /!\ /!\ ONLY DOWNLOAD THIS MOD FROM TRUSTED SOURCES /!\ /!\ /!\ 
+	 (Spelunky.fyi, Modlunky Menu, Github repository)
+
+
+If you are only playing locally and not joining/hosting anything, the disclaimer below is not relevant.
+
+Disclaimer: The mod is considered "unsafe" due to the requirement of UdpServer methods. Hosting a server will require knowledge on how to port forward and assumes any risk that comes with hosting a server on the internet. Joining a server assumes any risk with giving your IP to someone, but do feel free to use a VPN. Ignore this warning if you're only doing LAN / Multi-Instance
+sessions.
+
+Features absent from Spelunky 2's native online: 
++8 player adventure mode 
++Online / LAN / Multi-Instance Multiplayer Capability for the 8P mod
++Multiple people can join a server through one client
++Desynced game state correction
++Seeded run value can be set and changed any time
++Start in 1-1, 1-4, 3-1, 5-1, 7-5
++Restart sessions while keeping everyone connected to the server
++Host can kick unwanted players
++Host can lock/unlock the player list to prevent people from joining
++Selectable Network Profiles depending on your session type
++View and adjust input delay on the fly
++Game automatically adjusts input buffer depending on connection stability
+
+There's a chance some mods may also work with the online functions of this mod, but the resync option won't work
+because some custom data isn't saved in the game state. You may also encounter odd behavior when players 5 thru 8 
+attempt to interact with custom or modded objects. I have not put in any effort into modded compatability so 
+don't blame me! 
+
+Thanks for Playing!
