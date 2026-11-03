@@ -1,4 +1,4 @@
-Version = "0.10.3.2b"
+Version = "0.10.3.5b"
 -- ## ONLINE MANAGER ## --
 -- Function : Handle the server-client connection and instructions. Sends inputs over the network and tries to keep games in sync
 -- if you're wondering why the server code doesn't exist here, it's because this is a beta test version. 
@@ -7,30 +7,6 @@ Version = "0.10.3.2b"
 --[[ patch notes release.backup.patch.iteration
 
 *breaks compatibility with previous versions
-
-todo
-    
-    remember, design things around the capability of making sure even children can play this AND without having to close/reopen the game
-
-    issues -
-
-    BIG
-    make sure clients delete disconnected players during runs
-    olmec instantly desynced.
-    Local - player 5-8 metadata doesn't get saved thru level transitions
-    Local - money gets set to 0 when everyone is dead (LOL WHY)
-    when a rollback occurs after everyone dies, the game remembers and will respawn living players from the coffin. 
-    desyncs STILL happen. functional rollback and resyncing will be more than necessary. (likely happened because some players spawned hired hands and some didn't)
-    when a game gets run desynced and attempts are made to go back to the main menu, the game still holds back the clients and doesn't let them reset. host unaffected.
-
-    small
-    players 5-8 can't advance thru level transition, therefore if players 1-4 disconnect (impossible since there's always p1) the game can't continue
-    Local - Camera bounds are disabled when players 1-4 are dead
-    no "force start" button that starts a game without letting players choose their character 
-    8p local - make properly assigned keyboard inputs actually control the extra players
-    
-    anomaly
-    game crashed when ghost spawned after spawning dead player and killing them again while bloodfarming in vlad's castle (4:30 on timer)
 
 0.10.0 
     fixed issue where characters with custom heart colors did not render their offscreen icon
@@ -65,7 +41,9 @@ todo
 0.10.3 
     hotfixes. this should be the most stable version as of now.
     added network profiles which adjust the online manager and game's behavior based on the network environment
-    
+    Minimum input buffer has been lowered to 1 only for Multi-Instance Sessions
+    all clients who aren't host now properly remove players who disconnect from the game.
+    "Restart Session" button should be 100% consistent
 ]]
 
 
@@ -437,8 +415,8 @@ function InitFrameBufferClock()
         framebufferclock.MaxSpeed = 1.09
     end
     if options.NetProfile == 4 then
-        framebufferclock.MinSize = 4
-        framebufferclock.Rate = 15
+        framebufferclock.MinSize = 1
+        framebufferclock.Rate = 9
         framebufferclock.MinSpeed = 0.97
         framebufferclock.MaxSpeed = 1.1
     end
@@ -549,6 +527,7 @@ set_callback(function(draw_ctx)
     if state.screen == 4 or menu > 0 then
         color = rgba(255, 255, 255, 127)
         local extra = state.screen == 12 and (myframetime-150-state.time_level) ~= 0 and tostring("+"..(myframetime-150-state.time_level)) or ""
+        draw_ctx:draw_text(-0.98, -0.92, size*0.6, "playersCBC: "..tostring(inspect(playersControlledByClient)), color)
         draw_ctx:draw_text(-0.98, -0.95, size*0.6, "Delay: "..tostring(myinputbuffersize)..extra, color)
         color = rgba(255, 0, 0, 127)
         if Checksum.Warn and state.screen == 12 then draw_ctx:draw_text(0.8, -0.95, size*0.6, "Warning: Desync Detected ", color) end
@@ -1060,9 +1039,8 @@ function Joined()
     options.NetProfile =  win_combo("Network Profile", options.NetProfile, NetProfileStr)
     
     myinputbuffersize = win_input_int("Input Buffer (Frames)", myinputbuffersize)
-    myinputbuffersize = myinputbuffersize - 3
-    myinputbuffersize = (myinputbuffersize % 23)
-    myinputbuffersize = myinputbuffersize + 3
+    myinputbuffersize = (myinputbuffersize % 23) 
+    myinputbuffersize = myinputbuffersize >= framebufferclock.MinSize and myinputbuffersize or framebufferclock.MinSize
     myinputbuffersize = myinputbuffersize >= minBuffer and myinputbuffersize or minBuffer
     
     if state.screen < 12 then 
@@ -1219,6 +1197,16 @@ function Joined()
     end
 end
 
+function compilePlayersCBCPacket(sauce)
+    local packet = tostring(playersControlledByClient[1])
+    for i=2, 8, 1 do
+        packet = packet..tostring("|"..playersControlledByClient[i])
+    end
+    packet = packet..tostring("|"..minBuffer.."|"..Combos.StartingArea)
+    SendPacketToClient("playersCBC", packet, sauce)
+
+end
+
 function ServerTick()
     --prinspect("players Controlled By: "..inspect(playersControlledByClient))
     --prinspect("Clients Controlling: "..inspect(ClientsControlling))
@@ -1333,12 +1321,7 @@ function ServerTick()
                     end
                 end
 
-                packet = tostring(playersControlledByClient[1])
-                for i=2, 8, 1 do
-                    packet = packet..tostring("|"..playersControlledByClient[i])
-                end
-                packet = packet..tostring("|"..minBuffer.."|"..Combos.StartingArea)
-                SendPacketToClient("playersCBC", packet, source)
+                compilePlayersCBCPacket(source)
 
                 --place server chars into correct slot
                 timeout[id] = 0
@@ -1389,6 +1372,9 @@ function ServerTick()
                         table.remove(inputbufferfromclients[j], 1)
                     end
                     serverframetime = serverframetime + 1
+
+                    if serverframetime%60 == 2 then compilePlayersCBCPacket(source) end
+
                 end
                 serverframetime = MinFrameTime -- in the event that the server is running in the future, force the server to not do that.
                 BufferFix = inputbufferfromclients
@@ -1562,7 +1548,7 @@ function runInput()
     -- go back to menu screen when server gets force reset
     
     -- REALLY make sure that every client goes back
-    if state.screen >= 12 and serverState < 2 and state.fade_timer == 0 and state.screen_next ~= 4 and Online.Active then 
+    if state.screen >= 12 and serverState < 2 and state.fade_value == 0 and state.screen_next ~= 4 and Online.Active then 
         prinspect("Host restarted the session. You are still connected. (Player #"..tostring(myPlayerID).." "..tostring(Players[myPlayerID])..")")
         play_seeded(0)
         state.screen_next = 4
