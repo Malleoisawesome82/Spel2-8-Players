@@ -36,27 +36,27 @@ local DeadPlayer = {false, false, false, false}
 local p5Buttons = 0
 local p5uid = -1
 local p5status = {0, false, -1, false, false, 0, false}
+local p5Inv = {0, 0, "none", "none"}
 
 local p6Buttons = 0
 local p6uid = -1
 local p6status = {0, false, -1, false, false, 0, false}
+local p6Inv = {0, 0, "none", "none"}
 
 local p7Buttons = 0
 local p7uid = -1
 local p7status = {0, false, -1, false, false, 0, false}
+local p7Inv = {0, 0, "none", "none"}
 
 local p8Buttons = 0
 local p8uid = -1
 local p8status = {0, false, -1, false, false, 0, false}
+local p8Inv = {0, 0, "none", "none"}
 
 local HiredMan1 = nil
 local HiredMan2 = nil
 local HiredMan3 = nil
 local HiredMan4 = nil
-local p5Inv = {0, 0, "none", "none"}
-local p6Inv = {0, 0, "none", "none"}
-local p7Inv = {0, 0, "none", "none"}
-local p8Inv = {0, 0, "none", "none"}
 local FrontSurvivors = false
 local survivors = false
 
@@ -224,7 +224,10 @@ end
     if iio.keydown(KEY.PERIOD) then buttons = buttons + 2048 end -- down
   end
   if controlScheme > 4 then -- online inputs
-    buttons = Online.Buttons[controlScheme]
+  --prinspect("Level Time: "..state.time_level.." | Buttons: "..Online.Buttons[controlScheme])
+  if inputbufferlevel[controlScheme][state.time_level] ~= nil then prinspect("Player "..controlScheme.." | Input: "..tostring(inputbufferlevel[controlScheme][state.time_level]).." | Time: "..state.time_level-1)
+  else prinspect("Player "..controlScheme.." | Input: nil | Time: "..state.time_level-1) end
+    buttons = state.time_level > 10 and inputbufferlevel[controlScheme][state.time_level-1] or 0
   end
   return buttons
 end
@@ -463,7 +466,7 @@ function ReadStatus(HiredMan, status)
     HiredMan.poison_tick_timer = status[3]
   end
   if status[4] then HiredMan:set_cursed(true) end
-  if status[5] then set_entity_flags2(HiredMan.uid, 32768+HiredMan.more_flags) end
+  if status[5] then set_entity_flags2(HiredMan.uid, 32768+HiredMan.more_flags) end -- elixir
 end
 
 --USABLE FOR ALL PLAYERS
@@ -522,7 +525,7 @@ end
 --p5Inv = (HiredMan, pInv)
 --stores the inventory to be loaded in the next level
 function store_inventory(Player, Inventory)
-  Inventory = {0, 0, "none", "none"}
+  Inventory = {0, 0, "none", "none", 0}
   if Player.health < 1 then return Inventory end
   Inventory[1] = Player.inventory.bombs
   Inventory[2] = Player.inventory.ropes
@@ -530,13 +533,13 @@ function store_inventory(Player, Inventory)
   temp = Player:get_held_entity()
   --check if the held item is in the whitelist
   if temp ~= nil then for i=1, #CarryWhitelist, 1 do
-    if get_entity_type(temp.uid) == CarryWhitelist[i] then Inventory[4] = CarryWhitelist[i] break end
+    if get_entity_type(temp.uid) == CarryWhitelist[i] then Inventory[4] = CarryWhitelist[i] Inventory[5] = temp:get_metadata() break end
     Inventory[4] = "none"
   end end
   temp = Player:get_powerups()
   if #temp > 0 then
     for i=1, #temp, 1 do
-      Inventory[4+i] = temp[i]
+      Inventory[5+i] = temp[i]
     end
   end
   return Inventory
@@ -548,10 +551,13 @@ end
 function read_inventory(Player, Inventory)
  Player.inventory.bombs = Inventory[1]
  Player.inventory.ropes = Inventory[2]
+ local HeldItem = -1
+ if Inventory[4] ~= "none" and Inventory[4] ~= -1 then HeldItem = spawn_entity(Inventory[4], Player.x, Player.y, Player.layer, 0, 0) end
+
  if Inventory[3] ~= "none" and Inventory[3] ~= -1 and Inventory[3] < 600 then pick_up(Player.uid, spawn_entity(Inventory[3], Player.x, Player.y, Player.layer, 0, 0)) end
- if Inventory[4] ~= "none" and Inventory[3] ~= -1 then pick_up(Player.uid, spawn_entity(Inventory[4], Player.x, Player.y, Player.layer, 0, 0)) end
- if #Inventory > 4 then
-    for i=5, #Inventory, 1 do
+ if Inventory[4] ~= "none" and Inventory[4] ~= -1 then pick_up(Player.uid, HeldItem) end
+ if #Inventory > 5 then
+    for i=6, #Inventory, 1 do
       Player:give_powerup(Inventory[i])
     end
   end
@@ -571,7 +577,32 @@ if DieTable[DieOrder] == PlayerID then return end -- prevents the same player fr
 
 end
 
+function DeathTableFix() -- rewrites death table so it only holds death players
+  if not Online.Active then return end -- only rollback/state-fix scenarios will cause issues. rollback won't happen in local instances
+  prinspect("Running DeathTableFix()")
+  prinspect(DieTable)
+  DieTable = {0, 0, 0, 0, 0, 0, 0, 0}
+  DieOrder = 0
+  for i=1, 8 do
+    if i <= 4 then
+      local nubby = get_player(i, true)
+      if nubby ~= nil and (nubby.health < 1 or get_entity_type(nubby.uid) == ENT_TYPE.ITEM_PLAYERGHOST) then 
+        DieTable[DieOrder+1] = i
+        DieOrder = DieOrder + 1
+        prinspect("Player "..i.." is dead and was revived.")
+      end
+    else
+      if i == 5 and HiredMan1 ~= nil and (HiredMan1.health < 1 or get_entity_type(p5uid) == ENT_TYPE.ITEM_PLAYERGHOST) then DieTable[DieOrder+1] = i DieOrder = DieOrder + 1 end
+      if i == 6 and HiredMan2 ~= nil and (HiredMan2.health < 1 or get_entity_type(p6uid) == ENT_TYPE.ITEM_PLAYERGHOST) then DieTable[DieOrder+1] = i DieOrder = DieOrder + 1 end
+      if i == 7 and HiredMan3 ~= nil and (HiredMan3.health < 1 or get_entity_type(p7uid) == ENT_TYPE.ITEM_PLAYERGHOST) then DieTable[DieOrder+1] = i DieOrder = DieOrder + 1 end
+      if i == 8 and HiredMan4 ~= nil and (HiredMan4.health < 1 or get_entity_type(p8uid) == ENT_TYPE.ITEM_PLAYERGHOST) then DieTable[DieOrder+1] = i DieOrder = DieOrder + 1 end
+    end
+  end
+  prinspect(DieTable)
+end
+
 function DeathTableRead()
+  
   if DieOrder == 0 then return -1 end
   temp = {0, 0, 0, 0, 0, 0, 0, 0}
   temp[1] = DieTable[2]
@@ -934,6 +965,7 @@ function coffinHijackRespawn()
     local ReviveWho = 0
     temp = get_entities_by_type(ENT_TYPE.CHAR_EGGPLANT_CHILD) -- then the ana spelunkies that are spawned will revive all dead players from 5 to 8.
     if #temp < 1 then return end
+    DeathTableFix()
     for i=1, #temp do
       hijack = get_entity(temp[i])
       if hijack:get_texture() == 306 then --hijack the eggplant child
@@ -1432,41 +1464,7 @@ end
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                
  -- ------------
  --TODO: 
- -- figure out a way to draw the player icons or just use an alternate system entirely
  -- get ghist door working with cursed players 5 thru 8
- -- investigate why coffin respawn was wrong
- -- keep camera size change, but make it focus on players only.
- -- Prevent either daily challenge from being playable or coffins from spawning in daily challenge.
  -- get level bounds and enforce them since if players 1-4 are dead on level start, the camera ignores them.
  -- fix duat altar ankh transition crashing the game
- -- figure out how to get music working properly. you can hijack the death music transition, but then when players 1-4 start existing again, the music breaks until you go back to the menu.
- -- write a tutorial on how to set up the mod for in person play sessions 
- -- make char selection actually work for extra players
- -- fix ankh crashing the game for higher players
  -- fix ankh not teleporting players back correctly
-
-
-
-
- -- worry about online mode after finishing the local co-op version first
- -- Online mode:
- -- connect to a server that uses delay based netcode and host input authority
- --[[
- server host commands -
-
-local
-  start - creates server
-  end - ends all connections and deletes the server
-  disconnect - disconnects IP
-
-
-
-send
-
-
-
-recieve
- 
- 
- 
- ]]
