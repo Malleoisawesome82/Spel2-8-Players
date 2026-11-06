@@ -1,55 +1,45 @@
-Version = "0.10.3.5b"
+Version = "0.11.0.3m"
 -- ## ONLINE MANAGER ## --
 -- Function : Handle the server-client connection and instructions. Sends inputs over the network and tries to keep games in sync
 -- if you're wondering why the server code doesn't exist here, it's because this is a beta test version. 
 
--- values shared between the online and local co-op managers
+
 --[[ patch notes release.backup.patch.iteration
 
-*breaks compatibility with previous versions
 
-0.10.0 
-    fixed issue where characters with custom heart colors did not render their offscreen icon
-    added resync button
+0.11.0 
+    only host can be player 1
+    fixed p5-p8 characters desyncing from game clock changing pace
+    fixed coffin respawns being wrong
 
-0.10.1 - post test disaster
-    fixed when player disconnects from session in character select, the game still waits for them to select character
-    fixed when leaving server after choosing character, inputs aren't accepted and game is softlocked (client side issue)
-    fixed options.debugDesync not being cleared when in menu
-    maybe fixed refresh rates above 60hz can cause issues when going into the character select menu
-    fixed players being able to select characters when not supposed to
-    fixed when level transition is 'skipped,' players 5-8 are duplicated (8p local)
-    fixed extra players appear in the wrong spot during level transition, making it hard to tell where they are (8p local)
-    fixed when player is in options menu, game gets stuck
-    slightly adjusted how checksums are created to be more accurate
-    added "minimum delay" so players can't drag the session down by lagging
-    fixed disconnected players not having their input buffer automatically filled (server side issue)
-    fixed when a rewind happens, extra players lose the ability to control themselves and become hired hands
-    maybe fixed when a rewind happens, sometimes extra players are set to an invalid state
-    fixed when a rewind happens, not all players rewind sometimes, causing the game to permanently halt
-    fixed when player disconnects during attempting resync, server doesn't keep looking for their checksum
-    fixed it so when a player disconnects, their players stop appearing
-    added nametags to player HUDs ingame 
-    fixed after a rewind happens, sometimes the game doesn't pause when reaching the end of the input buffer, causing continuous desyncs 
-
-0.10.2 - private test success, and some extra polish
-    added a shortcut option for the host
-    fixed olmec cutscene desync
-    online menu input fields now save your data.
-    IDs no longer stack when trying to repeatedly join a server
-    automatic input buffer slightly adjusted so it doens't mainly cause slowdowns
-0.10.3 
-    hotfixes. this should be the most stable version as of now.
-    added network profiles which adjust the online manager and game's behavior based on the network environment
-    Minimum input buffer has been lowered to 1 only for Multi-Instance Sessions
-    all clients who aren't host now properly remove players who disconnect from the game.
-    "Restart Session" button should be 100% consistent
+0.11.1 - level transition resync via host authority
 ]]
 
 
+LvlTrns = { -- data structure for fixing desynced game states during level transition. 
+    PlayerExample = {
+        ID = 0, -- ID will be set in stone by its position in the main table
+        -- for front half IDs, the inventory memory can be directly accessed and written to
+        -- for back half IDs, the manually created tables in the local mod must be manually accessed and changed.
+        Bombs = 4,
+        Ropes = 7,
+        Backpack = ENT_TYPE.ITEM_JETPACK,
+        HeldItem = ENT_TYPE.ITEM_HOUYIBOW,
+        HeldMetadata = 8, -- in this example, he's holding the cosmic bow with sun arrow
+        Powerups = {ENT_TYPE.ITEM_POWERUP_KAPALA, ENT_TYPE.ITEM_POWERUP_ANKH, ENT_TYPE.ITEM_POWERUP_ROCKETSWORD,},
+        Status = {
+            Health = 4,
+            Poison = false,
+            PoisonTimer = -1,
+            Cursed = 0,
+            Elixir = false,
+        }
+    }
+
+}
 
 
-
+inputbufferlevel = {}
 
 TestValue = "Is it working, spongebob?"
 Online = {
@@ -97,7 +87,7 @@ Multi-Instance Session | You're running two or more Spelunky 2 instances on the 
 register_option_combo("NetProfile","Network Profile",NetProfileDesc, NetProfileStr, 1)
 
 register_option_bool("enableprintstatements", "Enable Print Statements", "Prints the incoming data of packets from the server (and clients if applicable)", false)
-register_option_bool("drawinputbuffer", "Draw Input Buffer", "Draws all relevant input buffers to screen", false)
+register_option_bool("drawinputbuffer", "Draw Input Buffer", "Draws all relevant input buffers to screen", true)
 register_option_bool("serverdebuginfo", "Show Debug Server Info", "Shows server debug into in the top left corner", false)
 register_option_bool("printratio", "Show Debug Auto-Adjust Ratio", "Shows ratio of connection stability used for adjusting the input buffer", false)
 register_option_bool("inputbufferautoadjust", "Auto-Adjust input buffer size", "Automatically adjusts the input buffer size based on how much lag is occuring", true)
@@ -180,7 +170,7 @@ Status = { -- server state status
     "Bad Port: Try between a range of 1-65535",
     "Password Rejected",
     "Network socket failure: local socket failed to bind to port",
-    "Packet Rejeted: Server not open to players",
+    "Packet Rejected - Server not open to players",
     "Adventure time",
     "Custom"
 }
@@ -201,7 +191,6 @@ myinputbuffer = {{}, {}, {}, {}}
 myinputbuffersize = 3
 inputbufferfromclients = {}
 inputbufferfromserver = {}
-inputbufferlevel = {}
 clientsconnected = {}
 CharsControlledBy = {0, 0, 0, 0, 0, 0, 0, 0}
 ServerChars = {193, 193, 193, 193, 193, 193, 193, 193}
@@ -285,7 +274,7 @@ Resync = {
             --LoadStateInputReset()
             if Resync.LoopIndex == 1 then 
                 load_state(1)
-                prinspect(Online.UIDs)
+                --prinspect(Online.UIDs)
                 --take back input from extra players
                 for i=5, 8 do
                     if Online.UIDs[i] > 0 then 
@@ -298,7 +287,7 @@ Resync = {
             end -- phase 1, try quickload only and increment loop count
             if Resync.LoopIndex == 2 then load_state(1) end -- phase 2, restart level
             if Resync.LoopIndex == 3 and Resync.LoopCount%4 == 0 then KillAllPlayers() end -- phase 3, kill everyone and reset run
-            if Resync.LoopIndex == 4 then LeaveOnlineGame("Desyncronization ended lobby. Tell the dev he's a NOOB.") end -- phase 4, quit
+            if Resync.LoopIndex == 4 then LeaveOnlineGame("Desyncronization ended lobby") end -- phase 4, quit
             Resync.LoopCount = Resync.LoopCount + 1
             
             if Resync.LoopAmounts[Resync.LoopIndex] <= Resync.LoopCount then
@@ -409,13 +398,13 @@ function InitFrameBufferClock()
         framebufferclock.MaxSpeed = 1.3
     end
     if options.NetProfile == 3 then
-        framebufferclock.MinSize = 3 
+        framebufferclock.MinSize = 4 
         framebufferclock.Rate = 15
         framebufferclock.MinSpeed = 0.94
         framebufferclock.MaxSpeed = 1.09
     end
     if options.NetProfile == 4 then
-        framebufferclock.MinSize = 1
+        framebufferclock.MinSize = 3
         framebufferclock.Rate = 9
         framebufferclock.MinSpeed = 0.97
         framebufferclock.MaxSpeed = 1.1
@@ -527,7 +516,7 @@ set_callback(function(draw_ctx)
     if state.screen == 4 or menu > 0 then
         color = rgba(255, 255, 255, 127)
         local extra = state.screen == 12 and (myframetime-150-state.time_level) ~= 0 and tostring("+"..(myframetime-150-state.time_level)) or ""
-        draw_ctx:draw_text(-0.98, -0.92, size*0.6, "playersCBC: "..tostring(inspect(playersControlledByClient)), color)
+        --draw_ctx:draw_text(-0.98, -0.92, size*0.6, "playersCBC: "..tostring(inspect(playersControlledByClient)), color)
         draw_ctx:draw_text(-0.98, -0.95, size*0.6, "Delay: "..tostring(myinputbuffersize)..extra, color)
         color = rgba(255, 0, 0, 127)
         if Checksum.Warn and state.screen == 12 then draw_ctx:draw_text(0.8, -0.95, size*0.6, "Warning: Desync Detected ", color) end
@@ -847,11 +836,9 @@ end
 function SoftLocked()
     if Server ~= nil and Server:is_open() then
         if serverState < 5 then return end
-        --print("Force restarting session")
-        state.fade_enabled = true
-        play_seeded(onlineSeed)
+        --play_seeded(onlineSeed)
         serverState = 1
-        state.screen_next = 4
+        --state.screen_next = 4
     end
 end
 
@@ -1014,6 +1001,7 @@ function Joined()
         else PulsePacketCharSelect() end -- inform server of your char data
         SendPacketToHost("Pulse", tostring(packet)) 
     end
+    
     if serverState == 0 then
         myframetime = 0
         leveltimeold = -1 
@@ -1135,8 +1123,13 @@ function Joined()
                 if myPlayerID > 1 then minBuffer = tonumber(inPacket[4]) end
             end
             if inPacket[1] == "Pulse" then -- pulse from the server that tells clients the session is still active, the names of all players, and the list of chars
+            if myPlayerID > 1 and false then
+            prinspect("Recieved pulse packet. Data Needed: state.screen >= 12 serverState < 2 and state.fade_value == 0")
+            prinspect("Data actual: state.screen: "..tostring(state.screen).." | serverState: "..tostring(serverState).." | state.fade_value "..tostring(state.fade_value))
+            prinspect("Next server state: "..tostring(inPacket[2]))
+            end
                 TimeSinceLastPulse = 0
-                serverState = Server ~= nil and Server:is_open() and serverState or tonumber(inPacket[2]) -- only change server state if this is a client
+                serverState = myPlayerID == 1 and serverState or tonumber(inPacket[2]) -- only change server state if this is a client
                 local ReadingChars = {Boolean = false, Index = 0}
                 ServerChars = {0, 0, 0, 0, 0, 0, 0, 0} -- clear list since clients don't do this correctly
                 for i=3, #inPacket, 1 do
@@ -1157,8 +1150,6 @@ function Joined()
                 end
                 if serverState == 5 and state.screen == 9 then warp(Shortcut[Shortcut.ID][1], Shortcut[Shortcut.ID][2], Shortcut[Shortcut.ID][3]) end -- if everyone is ready then start adventure
                 return 
-
-                --clean up names of players
             end
 
             if inPacket[1] == "Quit" then Socket:close() menu = 0 statusIndex = 11 return end
@@ -1254,9 +1245,13 @@ function ServerTick()
             serverState = tonumber(serverState) -- prevents hosting client from inadvertendly turning server state into a string
             if serverState == 0 then -- Waiting in menu, accepting players
                 if inPacket[3] == "JoinRequest" then --client trying to join. Server should give the OK and send player names
+                    if #Players == 0 and inPacket[2] ~= name then 
+                        return -- only host can be player 1. just return without running the rest of the code
+                    end
+                
                     if #Players >= 8 then return Server:send("PacketRejected", source) end 
                     for i=1, #Players, 1 do --  
-                        if Players[i] == inPacket[2] then return Server:send("PacketRejected", source) end
+                        if Players[i] == inPacket[2] then Server:send("PacketRejected", source) return end
                     end
                     printer("Server: Good Password from "..inPacket[2])
                     packet = "JoinOK|"..tostring(serverState)
@@ -1358,6 +1353,19 @@ function ServerTick()
                     SendPacketToClient("Kicked", "", source)
                     return
                 end
+                if serverState < 2 then
+                    packet = tostring(serverState)
+                    for i=1, #Players, 1 do
+                        packet = packet.."|"..Players[i]
+                    end
+                    packet = packet.."|CharIDs"
+                    for i=1, TotalChars, 1 do               
+                        packet = packet.."|"..ServerChars[i]
+                    end
+                    SendPacketToClient("Pulse", packet, source) -- reply of pulse sends names of all players to client
+                    return
+                end
+
                 timeout[clientID] = 0
                 local buffer = {}
                 frametimefromclient[clientID] = tonumber(inPacket[5])
@@ -1548,9 +1556,9 @@ function runInput()
     -- go back to menu screen when server gets force reset
     
     -- REALLY make sure that every client goes back
-    if state.screen >= 12 and serverState < 2 and state.fade_value == 0 and state.screen_next ~= 4 and Online.Active then 
+    if state.screen >= 12 and serverState < 2 and state.fade_value == 0 and Online.Active then 
         prinspect("Host restarted the session. You are still connected. (Player #"..tostring(myPlayerID).." "..tostring(Players[myPlayerID])..")")
-        play_seeded(0)
+        warp(1, 1, 1)
         state.screen_next = 4
     end
 
@@ -1565,6 +1573,14 @@ function runInput()
     if Socket == nil then pause(false) return false end
     if Socket and not Socket:is_open() then pause(false) return false end
     if serverState < 2 then pause(false) return false end
+
+
+    -- reset timers and clear levelbuffer when level timer decreases
+        if state.time_level < 2 and state.screen == 12 and myframetime > 150 then
+            inputbufferlevel = {{},{},{},{},{},{},{},{}}
+            myframetime = state.time_level + 150 -- the 150 is here to bypass the "preparing adventure" screen
+        end
+
     if state.screen >= 12 then
         --fix input indexes
         
@@ -1626,18 +1642,30 @@ function runInput()
                     state.player_inputs.player_slots[i].buttons_gameplay = inputbufferfromserver[i][1] or 0
                 end end
             else
-                if (myframetime-150-state.time_level) >= 1 and (state.time_level % 45) == 0 and not forceUpdateState then forceUpdateState = true update_state() end -- catch up with end of level buffer
-                if (state.time_level%45) == 1 then forceUpdateState = false end
 
                 for i=1, GetValidPlayers(), 1 do
-                    if i <= 4 then 
-                        state.player_inputs.player_slots[i].buttons = inputbufferlevel[i][state.time_level] or 0
-                        state.player_inputs.player_slots[i].buttons_gameplay = inputbufferlevel[i][state.time_level] or 0
-                            
-                    else -- set inputs for players 5-8
-                        Online.Buttons[i] = inputbufferlevel[i][state.time_level] or 0
+                    
+                    if state.time_level > 10 then 
+                        if i <= 4 then 
+                            state.player_inputs.player_slots[i].buttons = inputbufferlevel[i][state.time_level] or 0
+                            state.player_inputs.player_slots[i].buttons_gameplay = inputbufferlevel[i][state.time_level] or 0
+
+                        else -- set inputs for players 5-8
+                            Online.Buttons[i] = inputbufferlevel[i][state.time_level] or 0
+                        end
+                    else
+                        if i <= 4 then 
+                            state.player_inputs.player_slots[i].buttons = 0
+                            state.player_inputs.player_slots[i].buttons_gameplay = 0
+
+                        else -- set inputs for players 5-8
+                            Online.Buttons[i] = 0
+                        end
                     end
                 end
+                --prinspect("time: "..state.time_level.." | input P1: "..state.player_inputs.player_slots[1].buttons.." | input buffer data: "..inputbufferlevel[1][state.time_level])
+                --if (myframetime-150-state.time_level) >= 1 and not forceUpdateState then forceUpdateState = true update_state() end -- catch up with end of level buffer
+                --if (state.time_level%1) == 0 then forceUpdateState = false end
             end
             pause(false) 
         else pause(true) end
@@ -1669,7 +1697,7 @@ set_callback(function()
 
     if state.screen >= 12 then -- in run
     
-        if myframetime == 60*2.5 then game_manager.game_props.input_index = savedinputindex end -- putting this in the pre_update crashes the game
+        if (myframetime-150-state.time_level) >= 1 and state.screen == 12 then return end
         --every time frametime is a multiple of 100, check for desync. if desync is detected, rollback
         -- 2 - create checksum
         if (myframetime%100) == 2 then Checksum.Client = Checksum:Make() end
@@ -1696,11 +1724,7 @@ set_callback(function()
 
         end
 
-        -- reset timers and clear levelbuffer when level timer decreases
-        if leveltimeold > state.time_level and state.time_level > 0 then
-            inputbufferlevel = {{},{},{},{},{},{},{},{}}
-            myframetime = state.time_level + 150 -- the 150 is here to bypass the "preparing adventuer" screen
-        end
+
 
 
         -- write input buffer into the correct spot for the level buffer. remember, if level time is 0 then you're in a level transition.
@@ -1708,11 +1732,11 @@ set_callback(function()
         for i=1, #inputbufferfromserver, 1 do
             for j=1, #inputbufferfromserver[i] do
                 inputbufferlevel[i][myframetime-150+j] = inputbufferfromserver[i][j]
+                prinspect(myframetime-150+j)
             end
         end
 
 
-    
 
         --do i have a server input buffer?
         if inputbufferfromserver[1] ~=nil and #inputbufferfromserver[1] > 0 then 
@@ -1771,19 +1795,5 @@ set_callback(function(load_ctx)
     oldName = string.sub(name, 1, string.find(name, "#", -6)-2)
 end, ON.LOAD)
 
---[[ the way the system works is the clients send packets to the host, the host interprets the data and returns packets to the client.
-    if the client doesn't receive data from the server in 15 seconds, it times itself out. 
-    once a session begins, the game stops accepting local input
 
-    the client records the player's input every frame and places it in a buffer. if the buffer is filled before the end of the frame, the buffer and a frame counter is sent to the server
-
-    if the server has received input buffers from all players, it sends the minimum sized buffer to all players.
-        the min size is the lowest buffer size of all players, if one guy has 3 frame buffer and another guy has 15, the server sends only 3 frames of input
-    the client receives the input buffers for all players, updates the frame counter and runs the game world for one frame with the specific player inputs. 1 element is taken off from all buffers.
-    the client then reads player input to refill its own buffer, and sends a packet to the server becaues the player's input buffer is full.
-    the server sees that a player is running in the future, for every frame the player is in the future, it offsets where it writes into the input buffer table by 1.
-    when the server sends the packets, it sends the oldest ones.
-    when the client receives packets from the server, it recieves at what time frame the server is sitting at.
-    for every frame the client is in the future, it subtracts 1 from the received input buffer
-]]
 
